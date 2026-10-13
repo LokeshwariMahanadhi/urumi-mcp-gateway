@@ -1,0 +1,47 @@
+# Local test store: WordPress + WooCommerce on MariaDB.
+# Memory limits keep this small enough for an 8 GB laptop.
+
+services:
+  db:
+    image: mariadb:11.4
+    container_name: store-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wp_user
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    # Smaller settings so the database does not use much memory
+    command: --innodb-buffer-pool-size=64M --max-connections=30 --performance-schema=OFF
+    volumes:
+      - db_data:/var/lib/mysql
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  wordpress:
+    image: wordpress:apache
+    container_name: store-wordpress
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wp_user
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      # Only this computer can open the store
+      - "127.0.0.1:8081:80"
+    volumes:
+      - wp_data:/var/www/html
+    mem_limit: 512m
+
+# Named volumes keep the store data when containers restart
+volumes:
+  db_data:
+  wp_data:
