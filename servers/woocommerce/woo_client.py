@@ -6,6 +6,7 @@ HTTPS. So every request here is signed with OAuth 1.0a instead.
 import base64
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import time
@@ -13,7 +14,9 @@ from pathlib import Path
 from urllib.parse import quote
 
 import httpx2
-
+# httpx2 logs every request URL. Our URLs contain the signed login data,
+# so we only let it print warnings and errors.
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 class WooError(Exception):
     """Raised when the store is unreachable or answers with an error."""
