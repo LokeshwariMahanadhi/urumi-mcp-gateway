@@ -2,7 +2,7 @@
 
 A team MCP Gateway with a custom WooCommerce MCP server, built for the Urumi AI FDE internship assignment.
 
-**Status:** work in progress (Day 2 done: WooCommerce MCP server with 5 tools and tests).
+**Status:** work in progress (Days 2 to 4 done: WooCommerce MCP server, three upstream servers, the gateway, API keys, roles and audit log).
 
 ## What exists so far
 
@@ -11,7 +11,11 @@ A team MCP Gateway with a custom WooCommerce MCP server, built for the Urumi AI 
   `list_products`, `create_product`, `list_orders`, `get_order`, `update_order_status`.
 - Automated tests (pytest) for the WooCommerce client: settings, request signing, timeouts and error messages.
 
-Still to come: the gateway, two more upstream servers, roles and API keys, audit logs, the dashboard with AI chat, Helm, kind and k3s.
+- Two more upstream servers (`currency`, `utilities`) and a gateway that gives one endpoint with namespaced tools, routing, timeouts and failure isolation.
+- Hashed, revocable API keys, admin and member roles enforced on the server, and an audit log (see `docs/SECURITY.md`).
+- 35 automated tests.
+
+Still to come: the dashboard with AI chat, Docker images, Helm, kind and k3s.
 See `docs/REQUIREMENTS_CHECKLIST.md` for the honest status of every requirement.
 
 ## How to run it (Windows, PowerShell)
@@ -50,7 +54,6 @@ The tests use fake store replies, so they do not need Docker or the real store.
 - **No credentials in logs.** The HTTP library's request log printed signed URLs, so that logger is silenced.
 - **Separation of concerns.** The store client and the MCP tools live in separate files.
 
-### How this was built
 
 ## How this was built
 
