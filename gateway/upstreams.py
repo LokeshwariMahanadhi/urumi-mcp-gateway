@@ -58,3 +58,39 @@ async def list_all_tools():
     """Ask every upstream server at the same time, and collect the answers."""
     jobs = [list_tools_of(name, url) for name, url in UPSTREAMS.items()]
     return await asyncio.gather(*jobs)
+
+
+# A call can take longer than a tool listing. This is longer than the 10 seconds
+# the WooCommerce client waits for the store, so the store's own message arrives first.
+CALL_TIMEOUT_SECONDS = 15.0
+
+
+class GatewayError(Exception):
+    """An error whose message is safe to show to the user or to the AI."""
+
+
+def split_tool_name(full_name):
+    """Split 'currency_convert_currency' into ('currency', 'convert_currency')."""
+    upstream, separator, tool_name = full_name.partition("_")
+    if not separator or not tool_name:
+        raise GatewayError(f"'{full_name}' is not a valid tool name. Use server_tool.")
+    return upstream, tool_name
+
+
+async def call_tool_on(full_name, arguments):
+    """Send a tool call to the right upstream server, with a time limit."""
+    upstream, tool_name = split_tool_name(full_name)
+    url = UPSTREAMS.get(upstream)
+    if url is None:
+        raise GatewayError(f"There is no server called '{upstream}'.")
+
+    try:
+        async with asyncio.timeout(CALL_TIMEOUT_SECONDS):
+            async with Client(url) as client:
+                return await client.call_tool(tool_name, arguments)
+    except TimeoutError:
+        raise GatewayError(
+            f"The '{upstream}' server did not answer within {CALL_TIMEOUT_SECONDS:.0f} seconds."
+        ) from None
+    except Exception as error:
+        raise GatewayError(f"The '{upstream}' server is not reachable.") from error
