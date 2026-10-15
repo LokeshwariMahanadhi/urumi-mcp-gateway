@@ -47,7 +47,16 @@ def revoke_key(key_id):
             "WHERE id = %s AND revoked_at IS NULL",
             (key_id,),
         )
-
+def get_user_by_id(user_id):
+    """Find a user by number. Returns None if they no longer exist."""
+    with connect() as connection:
+        row = connection.execute(
+            "SELECT id, name, email, role FROM users WHERE id = %s",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return {"id": row[0], "name": row[1], "email": row[2], "role": row[3]}
 if __name__ == "__main__":
     # python -m gateway.accounts create-admin EMAIL "NAME"
     # python -m gateway.accounts new-key USER_ID
