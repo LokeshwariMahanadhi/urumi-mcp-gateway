@@ -62,5 +62,7 @@ if __name__ == "__main__":
     elif len(args) == 2 and args[0] == "revoke":
         revoke_key(int(args[1]))
         print("Key revoked.")
+    elif len(args) == 3 and args[0] == "create-member":
+        print(create_user(args[1], args[2], "member"))
     else:
         print("Commands: create-admin EMAIL NAME | new-key USER_ID | revoke KEY_ID")

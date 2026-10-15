@@ -2,28 +2,52 @@
 import uvicorn
 from mcp import types
 from mcp.server import Server
+
 from gateway.auth import AuthMiddleware
+from gateway.permissions import can_use_tool
 from gateway.upstreams import GatewayError, call_tool_on, list_all_tools, prefixed_name
 
 
+def get_user(ctx):
+    """The person who sent this request. AuthMiddleware put them there."""
+    request = ctx.request
+    if request is None:
+        return None
+    return request.scope.get("urumi_user")
+
+
+def role_of(user):
+    return user["role"] if user else None
+
+
 async def list_tools(ctx, params):
-    """Answer 'what tools do you have?' by combining every reachable upstream server."""
-    combined = []
+    """Answer 'what tools do you have?' with only the tools this person may use."""
+    role = role_of(get_user(ctx))
+    allowed = []
     for upstream in await list_all_tools():
         for tool in upstream.tools:
-            combined.append(
+            full_name = prefixed_name(upstream.name, tool.name)
+            if not can_use_tool(role, full_name):
+                continue
+            allowed.append(
                 types.Tool(
-                    name=prefixed_name(upstream.name, tool.name),
+                    name=full_name,
                     description=tool.description,
                     input_schema=tool.input_schema,
                     output_schema=tool.output_schema,
                 )
             )
-    return types.ListToolsResult(tools=combined)
+    return types.ListToolsResult(tools=allowed)
 
 
 async def call_tool(ctx, params):
-    """Answer 'run this tool' by sending the call to the right upstream server."""
+    """Answer 'run this tool' if allowed, by sending the call to the right upstream server."""
+    role = role_of(get_user(ctx))
+    if not can_use_tool(role, params.name):
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text="You do not have permission to use this tool.")],
+            is_error=True,
+        )
     try:
         result = await call_tool_on(params.name, params.arguments or {})
     except GatewayError as error:
@@ -46,7 +70,7 @@ mcp_gateway = Server(
 )
 
 # The web app that serves the MCP endpoint at /mcp.
-# API-key checking will be added in front of it on Day 4.
+# AuthMiddleware checks the API key before anything reaches the gateway.
 app = AuthMiddleware(mcp_gateway.streamable_http_app())
 # Keep this at the very bottom: it starts the gateway.
 if __name__ == "__main__":
