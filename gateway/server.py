@@ -2,7 +2,7 @@
 import uvicorn
 from mcp import types
 from mcp.server import Server
-
+from gateway.auth import AuthMiddleware
 from gateway.upstreams import GatewayError, call_tool_on, list_all_tools, prefixed_name
 
 
@@ -47,8 +47,7 @@ mcp_gateway = Server(
 
 # The web app that serves the MCP endpoint at /mcp.
 # API-key checking will be added in front of it on Day 4.
-app = mcp_gateway.streamable_http_app()
-
+app = AuthMiddleware(mcp_gateway.streamable_http_app())
 # Keep this at the very bottom: it starts the gateway.
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8200)
