@@ -1,8 +1,11 @@
 """The gateway: one MCP server that gives access to every upstream server."""
+import time
+
 import uvicorn
 from mcp import types
 from mcp.server import Server
 
+from gateway.audit import record
 from gateway.auth import AuthMiddleware
 from gateway.permissions import can_use_tool
 from gateway.upstreams import GatewayError, call_tool_on, list_all_tools, prefixed_name
@@ -18,6 +21,17 @@ def get_user(ctx):
 
 def role_of(user):
     return user["role"] if user else None
+
+
+def milliseconds_since(started):
+    return int((time.monotonic() - started) * 1000)
+
+
+def error_result(message):
+    return types.CallToolResult(
+        content=[types.TextContent(type="text", text=message)],
+        is_error=True,
+    )
 
 
 async def list_tools(ctx, params):
@@ -41,20 +55,22 @@ async def list_tools(ctx, params):
 
 
 async def call_tool(ctx, params):
-    """Answer 'run this tool' if allowed, by sending the call to the right upstream server."""
-    role = role_of(get_user(ctx))
-    if not can_use_tool(role, params.name):
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text="You do not have permission to use this tool.")],
-            is_error=True,
-        )
+    """Run the tool if this person may, and write one audit log row either way."""
+    user = get_user(ctx)
+    started = time.monotonic()
+
+    if not can_use_tool(role_of(user), params.name):
+        await record(user, params.name, milliseconds_since(started), "denied")
+        return error_result("You do not have permission to use this tool.")
+
     try:
         result = await call_tool_on(params.name, params.arguments or {})
     except GatewayError as error:
-        return types.CallToolResult(
-            content=[types.TextContent(type="text", text=str(error))],
-            is_error=True,
-        )
+        await record(user, params.name, milliseconds_since(started), "gateway_error")
+        return error_result(str(error))
+
+    outcome = "tool_error" if result.is_error else "success"
+    await record(user, params.name, milliseconds_since(started), outcome)
     # Build a fresh result so nothing internal from the upstream server leaks through.
     return types.CallToolResult(
         content=result.content,
