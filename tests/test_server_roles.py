@@ -39,7 +39,10 @@ def fake_upstreams(monkeypatch):
 
     async def fake_record(user, full_name, duration_ms, outcome):
         audit.append((full_name, outcome))
+    async def fake_refresh():
+        pass
 
+    monkeypatch.setattr(server, "refresh_upstreams", fake_refresh)
     monkeypatch.setattr(server, "list_all_tools", fake_list_all_tools)
     monkeypatch.setattr(server, "call_tool_on", fake_call_tool_on)
     monkeypatch.setattr(server, "record", fake_record)

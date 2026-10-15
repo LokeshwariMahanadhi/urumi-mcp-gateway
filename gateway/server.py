@@ -8,7 +8,7 @@ from mcp.server import Server
 from gateway.audit import record
 from gateway.auth import AuthMiddleware
 from gateway.permissions import can_use_tool
-from gateway.upstreams import GatewayError, call_tool_on, list_all_tools, prefixed_name
+from gateway.upstreams import GatewayError, call_tool_on, list_all_tools, prefixed_name, refresh_upstreams
 
 
 def get_user(ctx):
@@ -37,6 +37,7 @@ def error_result(message):
 async def list_tools(ctx, params):
     """Answer 'what tools do you have?' with only the tools this person may use."""
     role = role_of(get_user(ctx))
+    await refresh_upstreams()
     allowed = []
     for upstream in await list_all_tools():
         for tool in upstream.tools:
@@ -63,6 +64,7 @@ async def call_tool(ctx, params):
         await record(user, params.name, milliseconds_since(started), "denied")
         return error_result("You do not have permission to use this tool.")
 
+    await refresh_upstreams()
     try:
         result = await call_tool_on(params.name, params.arguments or {})
     except GatewayError as error:

@@ -3,7 +3,7 @@ import asyncio
 from dataclasses import dataclass, field
 
 from mcp import Client
-
+from gateway.db import connect
 # The upstream servers the gateway knows about.
 # Later these will come from the database, added by an admin in the dashboard.
 # Server names must NOT contain an underscore, because we use "_" to join
@@ -94,3 +94,22 @@ async def call_tool_on(full_name, arguments):
         ) from None
     except Exception as error:
         raise GatewayError(f"The '{upstream}' server is not reachable.") from error
+
+def load_upstreams_from_database():
+    """Every enabled server in the database, as {name: url}."""
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT name, url FROM upstream_servers WHERE enabled ORDER BY name"
+        ).fetchall()
+    return {name: url for name, url in rows}
+
+
+async def refresh_upstreams():
+    """Update the server list from the database.
+    If the database cannot be reached, keep the list we already have."""
+    try:
+        found = await asyncio.to_thread(load_upstreams_from_database)
+    except Exception:
+        return
+    UPSTREAMS.clear()
+    UPSTREAMS.update(found)
