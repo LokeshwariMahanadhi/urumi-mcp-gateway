@@ -6,10 +6,11 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from admin_api import queries
+from admin_api import queries, servers
 from admin_api.sessions import make_token, read_token
+from gateway.urlcheck import UrlRejected, check_upstream_url
 from gateway.accounts import (
     create_key,
     create_user,
@@ -25,7 +26,7 @@ bearer = HTTPBearer(auto_error=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -42,6 +43,17 @@ class NewUser(BaseModel):
 
 class NewKey(BaseModel):
     label: str = ""
+
+
+class NewServer(BaseModel):
+    # Lower case letters and digits only: the gateway builds tool names as servername_toolname.
+    name: str = Field(pattern=r"^[a-z0-9]+$", max_length=40)
+    url: str
+    credential: str = ""
+
+
+class EnabledFlag(BaseModel):
+    enabled: bool
 
 
 def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
@@ -112,6 +124,38 @@ def add_key(user_id: int, body: NewKey, admin=Depends(admin_only)):
 def revoke(key_id: int, admin=Depends(admin_only)):
     revoke_key(key_id)
     return {"revoked": True}
+
+
+@app.get("/api/servers")
+def list_servers(admin=Depends(admin_only)):
+    return servers.list_servers()
+
+
+@app.post("/api/servers", status_code=201)
+def add_server(body: NewServer, admin=Depends(admin_only)):
+    try:
+        check_upstream_url(body.url)
+    except UrlRejected as problem:
+        raise HTTPException(status_code=400, detail=str(problem))
+    try:
+        server_id = servers.add_server(body.name, body.url, body.credential)
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(status_code=409, detail="A server with that name already exists.")
+    return {"id": server_id}
+
+
+@app.post("/api/servers/{server_id}/enabled")
+def switch_server(server_id: int, body: EnabledFlag, admin=Depends(admin_only)):
+    if not servers.set_enabled(server_id, body.enabled):
+        raise HTTPException(status_code=404, detail="No such server.")
+    return {"enabled": body.enabled}
+
+
+@app.delete("/api/servers/{server_id}")
+def remove_server(server_id: int, admin=Depends(admin_only)):
+    if not servers.delete_server(server_id):
+        raise HTTPException(status_code=404, detail="No such server.")
+    return {"deleted": True}
 
 
 @app.get("/api/audit")
