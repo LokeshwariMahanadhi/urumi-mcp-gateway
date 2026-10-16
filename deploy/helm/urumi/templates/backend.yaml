@@ -19,12 +19,17 @@ spec:
           ports: [{ containerPort: 8200 }]
           env:
             {{- include "urumi.backendEnv" . | nindent 12 }}
+            # The names clients use to reach the gateway: inside the cluster and from outside.
+            - { name: ALLOWED_MCP_HOSTS, value: "gateway,{{ .Values.ingress.host }}" }
           readinessProbe:
             tcpSocket: { port: 8200 }
             periodSeconds: 5
+            timeoutSeconds: 5
           livenessProbe:
             tcpSocket: { port: 8200 }
-            initialDelaySeconds: 10
+            initialDelaySeconds: 45
+            timeoutSeconds: 5
+            failureThreshold: 6
             periodSeconds: 10
           resources: {{ toYaml .Values.resources.gateway | nindent 12 }}
           {{- include "urumi.containerSecurity" . | nindent 10 }}
@@ -47,7 +52,11 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: admin-api } }
   template:
-    metadata: { labels: { app: admin-api, tier: backend } }
+    metadata:
+      labels: { app: admin-api, tier: backend }
+      annotations:
+        # A changed Secret changes this value, so Kubernetes restarts the pod with the new settings.
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
     spec:
       serviceAccountName: urumi-app
       {{- include "urumi.podSecurity" . | nindent 6 }}
@@ -68,9 +77,12 @@ spec:
           readinessProbe:
             httpGet: { path: /api/health, port: 8300 }
             periodSeconds: 5
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /api/health, port: 8300 }
-            initialDelaySeconds: 10
+            initialDelaySeconds: 45
+            timeoutSeconds: 5
+            failureThreshold: 6
             periodSeconds: 10
           resources: {{ toYaml .Values.resources.adminApi | nindent 12 }}
           {{- include "urumi.containerSecurity" . | nindent 10 }}
@@ -107,9 +119,12 @@ spec:
           readinessProbe:
             httpGet: { path: /healthz, port: 8080 }
             periodSeconds: 5
+            timeoutSeconds: 5
           livenessProbe:
             httpGet: { path: /healthz, port: 8080 }
-            initialDelaySeconds: 5
+            initialDelaySeconds: 45
+            timeoutSeconds: 5
+            failureThreshold: 6
             periodSeconds: 10
           resources: {{ toYaml .Values.resources.frontend | nindent 12 }}
           securityContext:

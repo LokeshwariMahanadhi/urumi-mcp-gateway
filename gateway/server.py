@@ -5,6 +5,7 @@ import time
 import uvicorn
 from mcp import types
 from mcp.server import Server
+from mcp.server.transport_security import TransportSecuritySettings
 
 from gateway.audit import record
 from gateway.auth import AuthMiddleware
@@ -88,9 +89,25 @@ mcp_gateway = Server(
     on_call_tool=call_tool,
 )
 
+def transport_security():
+    """Only accept requests addressed to our own host names (a guard against DNS rebinding).
+
+    Locally that is just localhost. In Kubernetes, ALLOWED_MCP_HOSTS adds the service name and the
+    public host name, for example "gateway,urumi.example.com".
+    """
+    names = ["127.0.0.1", "localhost", "[::1]"]
+    names += [n.strip() for n in os.environ.get("ALLOWED_MCP_HOSTS", "").split(",") if n.strip()]
+    hosts, origins = [], []
+    for name in names:
+        hosts += [name, name + ":*"]
+        for scheme in ("http", "https"):
+            origins += [f"{scheme}://{name}", f"{scheme}://{name}:*"]
+    return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=origins)
+
+
 # The web app that serves the MCP endpoint at /mcp.
 # AuthMiddleware checks the API key before anything reaches the gateway.
-app = AuthMiddleware(mcp_gateway.streamable_http_app())
+app = AuthMiddleware(mcp_gateway.streamable_http_app(transport_security=transport_security()))
 # Keep this at the very bottom: it starts the gateway.
 if __name__ == "__main__":
     uvicorn.run(app, host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8200")))

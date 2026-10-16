@@ -36,7 +36,7 @@ def llm_settings():
         raise ChatError("The chat agent is not set up yet. An admin needs to add an AI provider key.")
     return {
         "base_url": os.environ.get("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai").rstrip("/"),
-        "model": os.environ.get("LLM_MODEL", "gemini-3.8-flash"),
+        "model": os.environ.get("LLM_MODEL", "gemini-3.5-flash"),
         "key": key,
     }
 

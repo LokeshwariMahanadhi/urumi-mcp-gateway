@@ -32,9 +32,12 @@ spec:
           readinessProbe:
             tcpSocket: { port: {{ $server.port }} }
             periodSeconds: 5
+            timeoutSeconds: 5
           livenessProbe:
             tcpSocket: { port: {{ $server.port }} }
-            initialDelaySeconds: 10
+            initialDelaySeconds: 45
+            timeoutSeconds: 5
+            failureThreshold: 6
             periodSeconds: 10
           resources: {{ toYaml $.Values.resources.mcp | nindent 12 }}
           {{- include "urumi.containerSecurity" $ | nindent 10 }}
