@@ -47,6 +47,16 @@ def revoke_key(key_id):
             "WHERE id = %s AND revoked_at IS NULL",
             (key_id,),
         )
+def revoke_own_key(key_id, user_id):
+    """Revoke a key, but only if it belongs to this user. Returns True if a key was revoked."""
+    with connect() as connection:
+        cursor = connection.execute(
+            "UPDATE api_keys SET revoked_at = now() WHERE id = %s AND user_id = %s AND revoked_at IS NULL",
+            (key_id, user_id),
+        )
+        return cursor.rowcount > 0
+
+
 def get_user_by_id(user_id):
     """Find a user by number. Returns None if they no longer exist."""
     with connect() as connection:

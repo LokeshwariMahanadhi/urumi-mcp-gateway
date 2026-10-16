@@ -15,7 +15,7 @@ def tool_kind(full_name, tool):
     return "write" if hint is False else "read"
 
 
-async def _probe(row):
+async def _probe(row, credential=None):
     """Ask one server for its tools and time the answer. Never raises."""
     base = {
         "id": row["id"],
@@ -31,7 +31,7 @@ async def _probe(row):
     if not row["enabled"]:
         return {**base, "status": "disabled"}
     started = time.perf_counter()
-    answer = await list_tools_of(row["name"], row["url"])
+    answer = await list_tools_of(row["name"], row["url"], credential)
     latency = round((time.perf_counter() - started) * 1000)
     if not answer.reachable:
         return {**base, "status": "down", "latency_ms": latency, "error": answer.error}
@@ -46,7 +46,8 @@ async def _probe(row):
 
 async def _probe_all():
     rows = await asyncio.to_thread(servers.list_servers)
-    return await asyncio.gather(*[_probe(row) for row in rows])
+    credentials = await asyncio.to_thread(servers.credentials_by_name)
+    return await asyncio.gather(*[_probe(row, credentials.get(row["name"])) for row in rows])
 
 
 async def server_health():

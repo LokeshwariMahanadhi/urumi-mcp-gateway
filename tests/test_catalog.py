@@ -19,8 +19,9 @@ def tool(name, description="A tool.", read_only=None):
 @pytest.fixture
 def fake_upstreams(monkeypatch):
     monkeypatch.setattr(catalog.servers, "list_servers", lambda: ROWS)
+    monkeypatch.setattr(catalog.servers, "credentials_by_name", lambda: {})
 
-    async def fake_list_tools_of(name, url):
+    async def fake_list_tools_of(name, url, credential=None):
         if name == "currency":
             return SimpleNamespace(name=name, reachable=False, tools=[], error="Could not connect (OSError).")
         return SimpleNamespace(

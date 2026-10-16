@@ -13,6 +13,9 @@ export interface KeyRow {
   id: number; user_id: number; user_name: string; label: string; key_prefix: string;
   created_at: string; revoked_at: string | null;
 }
+export interface MyKeyRow {
+  id: number; label: string; key_prefix: string; created_at: string; revoked_at: string | null;
+}
 export interface UserRow extends User { created_at: string }
 export type Outcome = "success" | "tool_error" | "gateway_error" | "denied";
 export interface AuditRow {
@@ -81,6 +84,8 @@ export const api = {
     request<{ id: number }>("POST", "/api/servers", { name, url, credential }),
   setServerEnabled: (id: number, enabled: boolean) =>
     request<{ enabled: boolean }>("POST", `/api/servers/${id}/enabled`, { enabled }),
+  editServer: (id: number, url: string, credential: string | null) =>
+    request<{ updated: boolean }>("PUT", `/api/servers/${id}`, { url, credential }),
   removeServer: (id: number) => request<{ deleted: boolean }>("DELETE", `/api/servers/${id}`),
   users: () => request<UserRow[]>("GET", "/api/users"),
   addUser: (email: string, name: string, role: Role) =>
@@ -89,6 +94,9 @@ export const api = {
   newKey: (userId: number, label: string) =>
     request<{ key: string }>("POST", `/api/users/${userId}/keys`, { label }),
   revokeKey: (id: number) => request<{ revoked: boolean }>("POST", `/api/keys/${id}/revoke`),
+  myKeys: () => request<MyKeyRow[]>("GET", "/api/me/keys"),
+  newMyKey: (label: string) => request<{ key: string }>("POST", "/api/me/keys", { label }),
+  revokeMyKey: (id: number) => request<{ revoked: boolean }>("POST", `/api/me/keys/${id}/revoke`),
   audit: (limit = 200) => request<AuditRow[]>("GET", `/api/audit?limit=${limit}`),
 };
 

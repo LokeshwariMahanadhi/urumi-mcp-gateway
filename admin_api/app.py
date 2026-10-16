@@ -18,6 +18,7 @@ from gateway.accounts import (
     find_user_by_key,
     get_user_by_id,
     revoke_key,
+    revoke_own_key,
 )
 
 app = FastAPI(title="Urumi gateway admin API")
@@ -27,7 +28,7 @@ bearer = HTTPBearer(auto_error=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -51,6 +52,12 @@ class NewServer(BaseModel):
     name: str = Field(pattern=r"^[a-z0-9]+$", max_length=40)
     url: str
     credential: str = ""
+
+
+class EditServer(BaseModel):
+    url: str
+    # None keeps the saved credential. An empty string removes it.
+    credential: str | None = None
 
 
 class EnabledFlag(BaseModel):
@@ -108,6 +115,25 @@ def add_user(body: NewUser, admin=Depends(admin_only)):
     return {"id": user_id}
 
 
+@app.get("/api/me/keys")
+def my_keys(user=Depends(current_user)):
+    """Every signed-in person can see their own keys, and nobody else's."""
+    return queries.list_keys_of(user["id"])
+
+
+@app.post("/api/me/keys", status_code=201)
+def make_my_key(body: NewKey, user=Depends(current_user)):
+    # The key is always made for the person who is signed in, never for someone else.
+    return {"key": create_key(user["id"], body.label)}
+
+
+@app.post("/api/me/keys/{key_id}/revoke")
+def revoke_my_key(key_id: int, user=Depends(current_user)):
+    if not revoke_own_key(key_id, user["id"]):
+        raise HTTPException(status_code=404, detail="No such key.")
+    return {"revoked": True}
+
+
 @app.get("/api/keys")
 def keys(admin=Depends(admin_only)):
     return queries.list_keys()
@@ -153,6 +179,17 @@ def add_server(body: NewServer, admin=Depends(admin_only)):
     except psycopg.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="A server with that name already exists.")
     return {"id": server_id}
+
+
+@app.put("/api/servers/{server_id}")
+def edit_server(server_id: int, body: EditServer, admin=Depends(admin_only)):
+    try:
+        check_upstream_url(body.url)
+    except UrlRejected as problem:
+        raise HTTPException(status_code=400, detail=str(problem))
+    if not servers.update_server(server_id, body.url, body.credential):
+        raise HTTPException(status_code=404, detail="No such server.")
+    return {"updated": True}
 
 
 @app.post("/api/servers/{server_id}/enabled")

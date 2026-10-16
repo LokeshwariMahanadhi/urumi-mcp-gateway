@@ -57,9 +57,62 @@ function AddServer({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+function EditServer({ server, onDone }: { server: ServerHealth; onDone: () => void }) {
+  const [url, setUrl] = useState(server.url);
+  const [credential, setCredential] = useState("");
+  const [removeCredential, setRemoveCredential] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    // Blank keeps the saved credential. The checkbox removes it. Anything typed replaces it.
+    const sent = removeCredential ? "" : credential === "" ? null : credential;
+    try {
+      await api.editServer(server.id, url.trim(), sent);
+      toast(`${server.name} updated.`);
+      onDone();
+    } catch (problem) {
+      setError(messageOf(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="field">
+        <label htmlFor={`edit-url-${server.id}`}>Address</label>
+        <input id={`edit-url-${server.id}`} className="input mono" value={url} onChange={(e) => setUrl(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor={`edit-cred-${server.id}`}>New credential</label>
+        <input id={`edit-cred-${server.id}`} className="input mono" type="password" autoComplete="off"
+          value={credential} disabled={removeCredential} onChange={(e) => setCredential(e.target.value)} />
+        <span className="hint">{server.has_credential ? "A credential is saved. Leave blank to keep it." : "No credential is saved."}</span>
+      </div>
+      {server.has_credential && (
+        <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+          <input type="checkbox" checked={removeCredential} onChange={(e) => setRemoveCredential(e.target.checked)} />
+          Remove the saved credential
+        </label>
+      )}
+      {error && <div className="error-text" role="alert">{error}</div>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn primary small" disabled={busy || !url.trim()}>{busy ? "Saving…" : "Save"}</button>
+        <button type="button" className="btn small" onClick={onDone}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 function ServerCard({ server, history, onChanged }: { server: ServerHealth; history: number[]; onChanged: () => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   async function run(action: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -68,7 +121,7 @@ function ServerCard({ server, history, onChanged }: { server: ServerHealth; hist
     finally { setBusy(false); }
   }
 
-  const label = server.status === "up" ? "Answering" : server.status === "down" ? "Not answering" : "Switched off";
+  const label = server.status === "up" ? "Connected" : server.status === "down" ? "Unreachable" : "Disabled";
   return (
     <article className={"card" + (server.status === "down" ? " is-down" : "") + (server.status === "disabled" ? " is-off" : "")}>
       <div className="card-top">
@@ -78,7 +131,8 @@ function ServerCard({ server, history, onChanged }: { server: ServerHealth; hist
         </div>
         <span className="muted" style={{ fontSize: 13 }}>{label}</span>
       </div>
-      <code className="card-url">{server.url}</code>
+      {editing && <EditServer server={server} onDone={() => { setEditing(false); onChanged(); }} />}
+      {!editing && <code className="card-url">{server.url}</code>}
       {server.status === "down" && <div className="error-text">{server.error}</div>}
       <div className="stats">
         <div className="stat"><b>{server.latency_ms === null ? "–" : `${server.latency_ms} ms`}</b><span>Response time</span></div>
@@ -96,6 +150,9 @@ function ServerCard({ server, history, onChanged }: { server: ServerHealth; hist
           </span>
           <span className="muted" style={{ fontSize: 13 }}>{server.enabled ? "On" : "Off"}</span>
         </label>
+        <button className="btn small" onClick={() => setEditing((open) => !open)} disabled={busy}>
+          {editing ? "Close" : "Edit"}
+        </button>
         <ConfirmButton label="Remove" confirmLabel="Click to confirm" disabled={busy}
           onConfirm={() => run(() => api.removeServer(server.id), `${server.name} removed.`)} />
       </div>
@@ -156,7 +213,7 @@ export default function Servers() {
       {rows && rows.length > 0 && (
         <div className="summary">
           <span className={"dot " + (answering === active.length ? "up" : "down")} aria-hidden="true" />
-          <span><b>{answering} of {active.length}</b> active servers answering · <b>{toolTotal}</b> tools available</span>
+          <span><b>{answering} of {active.length}</b> active servers connected · <b>{toolTotal}</b> tools available</span>
         </div>
       )}
 

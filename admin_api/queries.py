@@ -33,3 +33,13 @@ def list_audit(limit=100):
             (limit,),
         )
         return _rows_as_dicts(cursor)
+
+
+def list_keys_of(user_id):
+    """The keys of one person. Used for members, who may only see their own."""
+    with connect() as connection:
+        cursor = connection.execute(
+            "SELECT id, label, key_prefix, created_at, revoked_at FROM api_keys WHERE user_id = %s ORDER BY id",
+            (user_id,),
+        )
+        return _rows_as_dicts(cursor)
