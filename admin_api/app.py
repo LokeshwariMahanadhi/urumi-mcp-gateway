@@ -8,8 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from admin_api import queries, servers
+from admin_api import catalog, queries, servers
 from admin_api.sessions import make_token, read_token
+from gateway.permissions import can_use_tool
 from gateway.urlcheck import UrlRejected, check_upstream_url
 from gateway.accounts import (
     create_key,
@@ -124,6 +125,16 @@ def add_key(user_id: int, body: NewKey, admin=Depends(admin_only)):
 def revoke(key_id: int, admin=Depends(admin_only)):
     revoke_key(key_id)
     return {"revoked": True}
+
+
+@app.get("/api/servers/health")
+async def servers_health(admin=Depends(admin_only)):
+    return await catalog.server_health()
+
+
+@app.get("/api/tools")
+async def tools(user=Depends(current_user)):
+    return await catalog.tool_catalog(user["role"])
 
 
 @app.get("/api/servers")
