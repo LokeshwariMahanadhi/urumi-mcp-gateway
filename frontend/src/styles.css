@@ -277,3 +277,21 @@ tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 55%, transpa
   .skeleton { animation: none; }
   .toast { animation: none; }
 }
+
+/* ---------- Chat ---------- */
+.chat { display: flex; flex-direction: column; min-height: calc(100vh - 140px); }
+.transcript { flex: 1; display: flex; flex-direction: column; gap: 14px; padding-bottom: 16px; }
+.chat-empty { display: flex; flex-direction: column; gap: 12px; padding: 24px 0; }
+.bubble { max-width: min(760px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.bubble.user { align-self: flex-end; }
+.bubble-text { white-space: pre-wrap; line-height: 1.55; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.bubble.user .bubble-text { background: var(--accent-soft); border-color: var(--accent); }
+.steps { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.step { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.step summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; }
+.step.failed { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.step-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.step-body pre { margin: 0; padding: 10px; overflow-x: auto; max-height: 240px; border-radius: 8px; background: var(--bg); font-family: var(--font-code); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.composer { position: sticky; bottom: 0; display: flex; gap: 10px; align-items: flex-end; padding: 12px 0 4px; background: var(--bg); }
+.composer textarea { flex: 1; resize: vertical; min-height: 56px; font: inherit; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

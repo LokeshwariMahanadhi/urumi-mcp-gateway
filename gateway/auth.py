@@ -3,6 +3,7 @@ import asyncio
 import json
 
 from gateway.accounts import find_user_by_key
+from gateway.delegation import user_from_delegation_token
 
 
 def _bearer_key(scope):
@@ -46,6 +47,9 @@ class AuthMiddleware:
         try:
             # The database library is not async, so run it in a worker thread.
             user = await asyncio.to_thread(find_user_by_key, key)
+            # Not an API key? It may be a short-lived token from the chat agent (three parts joined by dots).
+            if user is None and key.count(".") == 2:
+                user = await asyncio.to_thread(user_from_delegation_token, key)
         except Exception:
             # If we cannot check the key, we let nobody in.
             await _reject(send, 503, "Cannot check API keys right now.")

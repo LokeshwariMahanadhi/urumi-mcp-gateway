@@ -15,6 +15,7 @@ const ICONS: Record<string, string> = {
   lock: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z",
   copy: "M9 9h11v11H9zM5 15V4h11",
   plus: "M12 5v14M5 12h14",
+  chat: "M4 5h16v11H9l-5 4zM8 9h8M8 12h5",
 };
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {
   return (

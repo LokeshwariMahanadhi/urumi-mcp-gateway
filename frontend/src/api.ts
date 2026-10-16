@@ -16,6 +16,10 @@ export interface KeyRow {
 export interface MyKeyRow {
   id: number; label: string; key_prefix: string; created_at: string; revoked_at: string | null;
 }
+export interface ChatStep {
+  tool: string; arguments: Record<string, unknown>; duration_ms: number; result: string; failed: boolean;
+}
+export interface ChatTurn { role: "user" | "assistant"; content: string }
 export interface UserRow extends User { created_at: string }
 export type Outcome = "success" | "tool_error" | "gateway_error" | "denied";
 export interface AuditRow {
@@ -97,6 +101,8 @@ export const api = {
   myKeys: () => request<MyKeyRow[]>("GET", "/api/me/keys"),
   newMyKey: (label: string) => request<{ key: string }>("POST", "/api/me/keys", { label }),
   revokeMyKey: (id: number) => request<{ revoked: boolean }>("POST", `/api/me/keys/${id}/revoke`),
+  chat: (messages: ChatTurn[]) =>
+    request<{ reply: string; steps: ChatStep[] }>("POST", "/api/chat", { messages }),
   audit: (limit = 200) => request<AuditRow[]>("GET", `/api/audit?limit=${limit}`),
 };
 

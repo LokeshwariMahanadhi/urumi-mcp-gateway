@@ -5,14 +5,16 @@ import Palette, { PaletteItem } from "./Palette";
 import Login from "./pages/Login";
 import Servers from "./pages/Servers";
 import Tools from "./pages/Tools";
+import Chat from "./pages/Chat";
 import Keys from "./pages/Keys";
 import MyKeys from "./pages/MyKeys";
 import Audit from "./pages/Audit";
 
-type PageId = "servers" | "tools" | "keys" | "audit";
+type PageId = "servers" | "tools" | "chat" | "keys" | "audit";
 const PAGES: { id: PageId; label: string; icon: string; adminOnly: boolean }[] = [
   { id: "servers", label: "Servers", icon: "servers", adminOnly: true },
   { id: "tools", label: "Tools", icon: "tools", adminOnly: false },
+  { id: "chat", label: "Chat", icon: "chat", adminOnly: false },
   { id: "keys", label: "Keys", icon: "keys", adminOnly: false },
   { id: "audit", label: "Audit log", icon: "audit", adminOnly: true },
 ];
@@ -103,6 +105,7 @@ function Shell({ user, onSignOut, theme, toggleTheme }: {
         <main className="page">
           {page === "servers" && <Servers />}
           {page === "tools" && <Tools role={user.role} />}
+          {page === "chat" && <Chat />}
           {page === "keys" && (user.role === "admin" ? <Keys /> : <MyKeys />)}
           {page === "audit" && <Audit />}
         </main>

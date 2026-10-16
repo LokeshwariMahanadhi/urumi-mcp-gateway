@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from admin_api import catalog, queries, servers
+from admin_api import catalog, chat, limits, queries, servers
 from admin_api.sessions import make_token, read_token
 from gateway.permissions import can_use_tool
 from gateway.urlcheck import UrlRejected, check_upstream_url
@@ -52,6 +52,16 @@ class NewServer(BaseModel):
     name: str = Field(pattern=r"^[a-z0-9]+$", max_length=40)
     url: str
     credential: str = ""
+
+
+class ChatMessage(BaseModel):
+    # Only these two roles are accepted, so the browser cannot slip in system or tool messages.
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=40)
 
 
 class EditServer(BaseModel):
@@ -204,6 +214,22 @@ def remove_server(server_id: int, admin=Depends(admin_only)):
     if not servers.delete_server(server_id):
         raise HTTPException(status_code=404, detail="No such server.")
     return {"deleted": True}
+
+
+@app.post("/api/chat")
+async def chat_with_agent(body: ChatRequest, user=Depends(current_user)):
+    """Answer a question with the AI model. Its tool calls go through the gateway as the signed-in user."""
+    if body.messages[-1].role != "user":
+        raise HTTPException(status_code=400, detail="The last message must be from you.")
+    if not limits.allow(user["id"]):
+        raise HTTPException(status_code=429, detail="You are sending messages too fast. Please wait a few minutes.")
+    history = [{"role": message.role, "content": message.content} for message in body.messages]
+    try:
+        return await chat.run_chat(user, history)
+    except chat.ChatError as problem:
+        raise HTTPException(status_code=503, detail=str(problem))
+    except Exception:
+        raise HTTPException(status_code=502, detail="The chat could not reach the gateway. Is it running?")
 
 
 @app.get("/api/audit")
