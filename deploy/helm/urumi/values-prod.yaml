@@ -1,0 +1,22 @@
+# For the VPS (k3s). Replace the host names with your own domain.
+# Secrets are NOT here: pass them at install time (see README) or use existingSecret.
+images:
+  pullPolicy: IfNotPresent
+
+ingress:
+  className: traefik
+  host: urumi.example.com
+  storeHost: store.example.com
+  scheme: https
+  tlsSecret: urumi-tls
+
+storage:
+  postgres: 5Gi
+  mariadb: 10Gi
+  wordpress: 10Gi
+
+resources:
+  wordpress: { requests: { cpu: 200m, memory: 384Mi }, limits: { cpu: 1500m, memory: 768Mi } }
+
+networkPolicies:
+  ingressNamespace: kube-system   # where k3s runs its Traefik ingress

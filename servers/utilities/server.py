@@ -1,4 +1,5 @@
 """A tiny utilities MCP server: the current time, and a ping to check it is alive."""
+import os
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.mcpserver import MCPServer
@@ -25,4 +26,4 @@ def ping() -> str:
 
 # Keep this at the very bottom: it starts the server.
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="127.0.0.1", port=8103)
+    mcp.run(transport="streamable-http", host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8103")))

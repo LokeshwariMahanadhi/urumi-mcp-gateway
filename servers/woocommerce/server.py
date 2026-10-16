@@ -1,4 +1,5 @@
 """WooCommerce MCP server: lets an AI assistant work with our store."""
+import os
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -142,4 +143,4 @@ async def update_order_status(order_id: int, status: str) -> dict:
     return short_order(order)
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="127.0.0.1", port=8101)
+    mcp.run(transport="streamable-http", host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8101")))

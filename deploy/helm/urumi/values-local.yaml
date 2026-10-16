@@ -1,0 +1,5 @@
+# For a kind cluster on a laptop. Small, plain HTTP, throw-away passwords.
+ingress:
+  host: urumi.localtest.me
+  storeHost: store.localtest.me
+  publicPort: ":8088"

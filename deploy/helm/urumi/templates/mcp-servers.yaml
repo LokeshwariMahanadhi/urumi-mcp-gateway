@@ -1,0 +1,51 @@
+{{- range $name, $server := .Values.mcpServers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-mcp
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: {{ $name }}-mcp } }
+  template:
+    metadata: { labels: { app: {{ $name }}-mcp, tier: mcp } }
+    spec:
+      serviceAccountName: urumi-app
+      {{- include "urumi.podSecurity" $ | nindent 6 }}
+      containers:
+        - name: server
+          image: {{ $.Values.images.backend }}
+          imagePullPolicy: {{ $.Values.images.pullPolicy }}
+          command: ["python", "-m", {{ $server.module | quote }}]
+          ports: [{ containerPort: {{ $server.port }} }]
+          env:
+            - { name: BIND_HOST, value: "0.0.0.0" }
+            - { name: PORT, value: {{ $server.port | quote }} }
+            {{- if eq $name "woocommerce" }}
+            # Reaches the store on its internal address. This server is not exposed outside the cluster.
+            - { name: WOOCOMMERCE_URL, value: "http://wordpress" }
+            - name: WOOCOMMERCE_CONSUMER_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" $ }}, key: WOOCOMMERCE_CONSUMER_KEY } }
+            - name: WOOCOMMERCE_CONSUMER_SECRET
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" $ }}, key: WOOCOMMERCE_CONSUMER_SECRET } }
+            {{- end }}
+          readinessProbe:
+            tcpSocket: { port: {{ $server.port }} }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: {{ $server.port }} }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: {{ toYaml $.Values.resources.mcp | nindent 12 }}
+          {{- include "urumi.containerSecurity" $ | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-mcp
+spec:
+  selector: { app: {{ $name }}-mcp }
+  ports: [{ port: {{ $server.port }}, targetPort: {{ $server.port }} }]
+{{- end }}

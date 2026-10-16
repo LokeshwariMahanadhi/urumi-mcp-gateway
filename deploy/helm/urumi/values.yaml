@@ -1,0 +1,61 @@
+# Defaults. values-local.yaml and values-prod.yaml change only what differs.
+
+images:
+  backend: urumi-backend:local
+  frontend: urumi-frontend:local
+  pullPolicy: IfNotPresent
+
+ingress:
+  className: nginx
+  host: urumi.localtest.me        # dashboard, /api and /mcp
+  storeHost: store.localtest.me   # the WooCommerce storefront
+  publicPort: ""                  # e.g. ":8088" when kind maps the ingress to another port
+  scheme: http
+  tlsSecret: ""                   # set to enable HTTPS (prod)
+
+# Passwords and keys. Dev values below are throw-away. In prod pass your own with
+# --set, or create a Secret yourself and name it in existingSecret.
+existingSecret: ""
+secrets:
+  postgresPassword: dev-postgres-password
+  adminSessionSecret: dev-session-secret-change-me-0123456789
+  chatGatewaySecret: dev-delegation-secret-change-me-0123456789
+  llmApiKey: ""
+  dbPassword: dev-store-db-password
+  dbRootPassword: dev-store-root-password
+  wpAdminPassword: dev-wp-admin-password
+  wooConsumerKey: ck_0123456789abcdef0123456789abcdef01234567
+  wooConsumerSecret: cs_0123456789abcdef0123456789abcdef01234567
+
+llm:
+  baseUrl: https://generativelanguage.googleapis.com/v1beta/openai
+  model: gemini-3.8-flash
+
+bootstrap:
+  adminEmail: admin@example.com
+  memberEmail: member@example.com
+
+storage:
+  postgres: 1Gi
+  mariadb: 2Gi
+  wordpress: 2Gi
+  storageClass: ""
+
+# The three MCP servers. Each is its own Deployment and Service.
+mcpServers:
+  woocommerce: { port: 8101, module: servers.woocommerce.server }
+  currency:    { port: 8102, module: servers.currency.server }
+  utilities:   { port: 8103, module: servers.utilities.server }
+
+resources:
+  gateway:   { requests: { cpu: 50m,  memory: 96Mi  }, limits: { cpu: 500m, memory: 256Mi } }
+  adminApi:  { requests: { cpu: 50m,  memory: 96Mi  }, limits: { cpu: 500m, memory: 256Mi } }
+  mcp:       { requests: { cpu: 25m,  memory: 64Mi  }, limits: { cpu: 250m, memory: 192Mi } }
+  frontend:  { requests: { cpu: 10m,  memory: 16Mi  }, limits: { cpu: 100m, memory: 64Mi  } }
+  postgres:  { requests: { cpu: 50m,  memory: 128Mi }, limits: { cpu: 500m, memory: 256Mi } }
+  mariadb:   { requests: { cpu: 50m,  memory: 192Mi }, limits: { cpu: 500m, memory: 384Mi } }
+  wordpress: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1000m, memory: 512Mi } }
+
+networkPolicies:
+  enabled: true
+  ingressNamespace: ingress-nginx

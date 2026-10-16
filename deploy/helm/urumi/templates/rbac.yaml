@@ -1,0 +1,7 @@
+# Our pods never talk to the Kubernetes API, so they get an account with no permissions
+# and no token mounted. That is the least-privilege setting.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: urumi-app
+automountServiceAccountToken: false

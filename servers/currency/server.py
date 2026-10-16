@@ -1,4 +1,5 @@
 """A small currency MCP server. The rates are sample data, so no internet is needed."""
+import os
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -55,4 +56,4 @@ def ping() -> str:
 
 # Keep this at the very bottom: it starts the server.
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="127.0.0.1", port=8102)
+    mcp.run(transport="streamable-http", host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8102")))

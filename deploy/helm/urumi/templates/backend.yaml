@@ -1,0 +1,125 @@
+# The gateway (the one MCP endpoint) and the admin API (what the dashboard talks to).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: gateway } }
+  template:
+    metadata: { labels: { app: gateway, tier: backend } }
+    spec:
+      serviceAccountName: urumi-app
+      {{- include "urumi.podSecurity" . | nindent 6 }}
+      containers:
+        - name: gateway
+          image: {{ .Values.images.backend }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["python", "-m", "gateway.server"]
+          ports: [{ containerPort: 8200 }]
+          env:
+            {{- include "urumi.backendEnv" . | nindent 12 }}
+          readinessProbe:
+            tcpSocket: { port: 8200 }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 8200 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: {{ toYaml .Values.resources.gateway | nindent 12 }}
+          {{- include "urumi.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector: { app: gateway }
+  ports: [{ port: 8200, targetPort: 8200 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-api
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: admin-api } }
+  template:
+    metadata: { labels: { app: admin-api, tier: backend } }
+    spec:
+      serviceAccountName: urumi-app
+      {{- include "urumi.podSecurity" . | nindent 6 }}
+      containers:
+        - name: admin-api
+          image: {{ .Values.images.backend }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["python", "-m", "admin_api.app"]
+          ports: [{ containerPort: 8300 }]
+          env:
+            {{- include "urumi.backendEnv" . | nindent 12 }}
+            - { name: CORS_ORIGINS, value: {{ include "urumi.publicUrl" . | quote }} }
+            - { name: GATEWAY_URL, value: "http://gateway:8200/mcp" }
+            - { name: LLM_BASE_URL, value: {{ .Values.llm.baseUrl | quote }} }
+            - { name: LLM_MODEL, value: {{ .Values.llm.model | quote }} }
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: LLM_API_KEY } }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 8300 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /api/health, port: 8300 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources: {{ toYaml .Values.resources.adminApi | nindent 12 }}
+          {{- include "urumi.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-api
+spec:
+  selector: { app: admin-api }
+  ports: [{ port: 8300, targetPort: 8300 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: frontend } }
+  template:
+    metadata: { labels: { app: frontend, tier: web } }
+    spec:
+      serviceAccountName: urumi-app
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: nginx
+          image: {{ .Values.images.frontend }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{ toYaml .Values.resources.frontend | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector: { app: frontend }
+  ports: [{ port: 80, targetPort: 8080 }]

@@ -1,6 +1,8 @@
 """The admin API: what the dashboard talks to."""
 from typing import Literal
 
+import logging
+import os
 import psycopg
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -27,7 +29,7 @@ bearer = HTTPBearer(auto_error=False)
 # The dashboard runs on its own address while we develop, so the browser needs permission to call us.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()],
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -228,7 +230,15 @@ async def chat_with_agent(body: ChatRequest, user=Depends(current_user)):
         return await chat.run_chat(user, history)
     except chat.ChatError as problem:
         raise HTTPException(status_code=503, detail=str(problem))
-    except Exception:
+    except Exception as problem:
+        # The MCP client wraps errors in groups; a ChatError inside one is still a ChatError.
+        inner = problem
+        while isinstance(inner, BaseExceptionGroup) and inner.exceptions:
+            inner = inner.exceptions[0]
+        if isinstance(inner, chat.ChatError):
+            raise HTTPException(status_code=503, detail=str(inner))
+        # Show the real cause in this window; the browser only gets a safe message.
+        logging.getLogger("uvicorn.error").exception("Chat failed")
         raise HTTPException(status_code=502, detail="The chat could not reach the gateway. Is it running?")
 
 
@@ -239,4 +249,4 @@ def audit(limit: int = Query(100, ge=1, le=500), admin=Depends(admin_only)):
 
 # Keep this at the very bottom: it starts the admin API.
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8300)
+    uvicorn.run(app, host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8300")))

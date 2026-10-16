@@ -1,0 +1,107 @@
+# Runs once after the first install: creates the tables, the first two users and registers the MCP servers.
+# The two API keys are printed ONCE, in this job's log:  kubectl logs job/bootstrap
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 6
+  template:
+    metadata: { labels: { app: bootstrap } }
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: urumi-app
+      {{- include "urumi.podSecurity" . | nindent 6 }}
+      containers:
+        - name: bootstrap
+          image: {{ .Values.images.backend }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              until python -c "from gateway.db import connect; connect().close()" 2>/dev/null; do echo waiting for the database; sleep 3; done
+              python -m scripts.bootstrap
+          env:
+            {{- include "urumi.backendEnv" . | nindent 12 }}
+            - { name: ADMIN_EMAIL, value: {{ .Values.bootstrap.adminEmail | quote }} }
+            - { name: MEMBER_EMAIL, value: {{ .Values.bootstrap.memberEmail | quote }} }
+            - { name: WOOCOMMERCE_MCP_URL, value: "http://woocommerce-mcp:8101/mcp" }
+            - { name: CURRENCY_MCP_URL, value: "http://currency-mcp:8102/mcp" }
+            - { name: UTILITIES_MCP_URL, value: "http://utilities-mcp:8103/mcp" }
+          resources: {{ toYaml .Values.resources.adminApi | nindent 12 }}
+          {{- include "urumi.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+---
+# Sets up the store once: installs WordPress and WooCommerce, turns on Cash on Delivery,
+# adds shipping and sample products, and creates the REST key the WooCommerce MCP server uses.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: store-setup
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 6
+  template:
+    metadata: { labels: { app: store-setup } }
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext: { runAsUser: 33, runAsGroup: 33 }
+      containers:
+        - name: setup
+          image: wordpress:cli
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              wp() { php -d memory_limit=512M /usr/local/bin/wp "$@"; }
+              until [ -f /var/www/html/wp-config.php ]; do echo waiting for WordPress files; sleep 3; done
+              until php -r '$m=@new mysqli(getenv("WORDPRESS_DB_HOST"),getenv("WORDPRESS_DB_USER"),getenv("WORDPRESS_DB_PASSWORD"),getenv("WORDPRESS_DB_NAME")); exit($m->connect_errno?1:0);'; do echo waiting for the store database; sleep 3; done
+              if ! wp core is-installed; then
+                wp core install --url="$STORE_URL" --title="Urumi Store" --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" --admin_email=admin@example.com --skip-email
+              fi
+              wp rewrite structure '/%postname%/' --hard
+              wp plugin is-installed woocommerce || wp plugin install woocommerce
+              wp plugin activate woocommerce
+              if ! wp option get urumi_store_seeded >/dev/null 2>&1; then
+                wp option update woocommerce_default_country 'IN:TN'
+                wp option update woocommerce_currency INR
+                wp option update woocommerce_coming_soon no
+                wp option update woocommerce_store_pages_only no
+                wp wc payment_gateway update cod --enabled=true --user=admin
+                wp wc shipping_zone_method create 0 --method_id=flat_rate --settings='{"cost":"50"}' --user=admin
+                wp wc product create --name="Masala Chai Tin" --type=simple --regular_price=250 --user=admin
+                wp wc product create --name="Filter Coffee Powder" --type=simple --regular_price=320 --user=admin
+                wp wc product create --name="Cotton Kitchen Towel" --type=simple --regular_price=150 --user=admin
+                wp option add urumi_store_seeded yes
+              fi
+              wp eval 'global $wpdb; $t=$wpdb->prefix."woocommerce_api_keys"; $wpdb->delete($t, array("description"=>"urumi-mcp")); $ck=getenv("WOOCOMMERCE_CONSUMER_KEY"); $wpdb->insert($t, array("user_id"=>1,"description"=>"urumi-mcp","permissions"=>"read_write","consumer_key"=>wc_api_hash($ck),"consumer_secret"=>getenv("WOOCOMMERCE_CONSUMER_SECRET"),"truncated_key"=>substr($ck,-7)));'
+              echo "Store is ready."
+          env:
+            - { name: HOME, value: /tmp }
+            - { name: WORDPRESS_DB_HOST, value: mariadb }
+            - { name: WORDPRESS_DB_NAME, value: wordpress }
+            - { name: WORDPRESS_DB_USER, value: wp_user }
+            - { name: STORE_URL, value: {{ include "urumi.storeUrl" . | quote }} }
+            - { name: STORE_HOST, value: "{{ .Values.ingress.storeHost }}{{ .Values.ingress.publicPort }}" }
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: DB_PASSWORD } }
+            - name: WP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: WP_ADMIN_PASSWORD } }
+            - name: WOOCOMMERCE_CONSUMER_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: WOOCOMMERCE_CONSUMER_KEY } }
+            - name: WOOCOMMERCE_CONSUMER_SECRET
+              valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: WOOCOMMERCE_CONSUMER_SECRET } }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 1000m, memory: 768Mi }
+          volumeMounts: [{ name: html, mountPath: /var/www/html }]
+      volumes:
+        - name: html
+          persistentVolumeClaim: { claimName: wordpress-data }

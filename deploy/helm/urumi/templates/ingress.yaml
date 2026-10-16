@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: urumi
+  annotations:
+    # The MCP endpoint streams, so do not buffer or cut it off early (nginx only; harmless elsewhere).
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tlsSecret }}
+  tls:
+    - secretName: {{ .Values.ingress.tlsSecret }}
+      hosts: [{{ .Values.ingress.host | quote }}, {{ .Values.ingress.storeHost | quote }}]
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - { path: /api, pathType: Prefix, backend: { service: { name: admin-api, port: { number: 8300 } } } }
+          - { path: /mcp, pathType: Prefix, backend: { service: { name: gateway, port: { number: 8200 } } } }
+          - { path: /, pathType: Prefix, backend: { service: { name: frontend, port: { number: 80 } } } }
+    - host: {{ .Values.ingress.storeHost }}
+      http:
+        paths:
+          - { path: /, pathType: Prefix, backend: { service: { name: wordpress, port: { number: 80 } } } }

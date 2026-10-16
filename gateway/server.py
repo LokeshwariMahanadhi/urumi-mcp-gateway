@@ -1,4 +1,5 @@
 """The gateway: one MCP server that gives access to every upstream server."""
+import os
 import time
 
 import uvicorn
@@ -92,4 +93,4 @@ mcp_gateway = Server(
 app = AuthMiddleware(mcp_gateway.streamable_http_app())
 # Keep this at the very bottom: it starts the gateway.
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8200)
+    uvicorn.run(app, host=os.environ.get("BIND_HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8200")))
