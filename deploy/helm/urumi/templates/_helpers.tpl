@@ -41,5 +41,6 @@ securityContext:
   valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: ADMIN_SESSION_SECRET } }
 - name: CHAT_GATEWAY_SECRET
   valueFrom: { secretKeyRef: { name: {{ include "urumi.secretName" . }}, key: CHAT_GATEWAY_SECRET } }
-- { name: ALLOWED_UPSTREAM_HOSTS, value: "{{ join "," (keys .Values.mcpServers | sortAlpha) }}" }
+# The in-cluster service names of our own MCP servers (for example woocommerce-mcp) skip the private-address check.
+- { name: ALLOWED_UPSTREAM_HOSTS, value: "{{ range $i, $n := (keys .Values.mcpServers | sortAlpha) }}{{ if $i }},{{ end }}{{ $n }}-mcp{{ end }}" }
 {{- end -}}

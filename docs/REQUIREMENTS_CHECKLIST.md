@@ -1,54 +1,70 @@
 # Requirements checklist
 
-Honest status of every requirement. "DONE" always has evidence. Updated 15 Oct 2026 (Day 4).
+Honest status of every requirement. "DONE" always has evidence. Evidence from the Kubernetes run was seen on a real kind cluster.
 
 ## Core requirements
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| Custom WooCommerce MCP server (5 tools) | DONE | Port 8101; tested in MCP Inspector; commit 5b8c19c |
-| WordPress + WooCommerce, data kept across restarts | IN PROGRESS | Docker Compose with named volumes (local). Kubernetes version not done yet |
-| At least 3 upstream MCP servers | DONE | woocommerce, currency (2eb5e77), utilities (a8d420b) |
-| One gateway endpoint (Streamable HTTP) | DONE | `http://127.0.0.1:8200/mcp` (22dd08f) |
-| Tool discovery and namespacing | DONE | Tools appear as `servername_toolname`, for example `currency_ping` |
-| Routing to the right upstream | DONE | `gateway/upstreams.py`, tested |
-| Timeouts | DONE | 5 s for listing, 15 s for calls |
-| Failure isolation | DONE | A stopped upstream is marked unreachable; the others keep working and it recovers without a restart |
-| Admin and member roles, enforced on the server | DONE | Member sees 8 tools, is refused the write tool (0a89702, 5 role tests) |
-| API keys: hashed and revocable | DONE | Only a SHA-256 hash is stored; shown once; revoke proven (be5d502) |
-| Key required on the gateway | DONE | 401 with no key or a wrong key; 503 if the database is down (tests) |
-| Audit log | DONE | One row per call, including refused calls and failures (a13da56) |
-| Automated tests | DONE | 35 passing |
-| Credentials never in logs | DONE | Signed-URL log leak found and fixed (5b8c19c) |
-| Admin API for the dashboard | NOT STARTED | |
-| React dashboard (login, servers, keys, audit log) | NOT STARTED | |
-| Chat agent with real tool calling | NOT STARTED | |
-| Dockerfiles for each service | NOT STARTED | |
-| Helm charts (local and production values) | NOT STARTED | |
-| Running on kind | NOT STARTED | |
-| k3s on a VPS with TLS | NOT STARTED | |
-| WooCommerce MCP server reachable only inside the cluster | NOT STARTED | |
-| Place a test order on the storefront (cash on delivery) | NOT STARTED | |
-| Connect an external MCP client (documented) | IN PROGRESS | Works locally with MCP Inspector; the README section is not written yet |
+| Custom WooCommerce MCP server (5 tools) | DONE | `servers/woocommerce/`; tools called through the gateway and in the dashboard chat (list products, list orders, get order, update order status) |
+| WordPress + WooCommerce, data kept across restarts | DONE | StatefulSet/Deployment with three bound persistent volumes; the whole cluster was shut down overnight and came back with the same pods and data |
+| At least 3 upstream MCP servers | DONE | woocommerce, currency, utilities, shown "3 of 3 connected" in the dashboard |
+| One gateway endpoint (Streamable HTTP) | DONE | `http://urumi.localtest.me:8088/mcp` through the Ingress; an outside client connected with only the URL and a key |
+| Tool discovery and namespacing | DONE | Tools appear as `servername_toolname` (10 tools for an admin) |
+| Routing to the right upstream | DONE | `gateway/upstreams.py`, tests, and live calls to all three servers |
+| Timeouts | DONE | 5 s for listing, 15 s for calls; the dashboard showed "No answer within 5 seconds." for a stopped server |
+| Failure isolation | DONE | Stopped the currency server on the cluster: "2 of 3 connected", the chat still listed products; it recovered with no gateway restart |
+| Admin and member roles, enforced on the server | DONE | Member sees 8 tools, is refused `woocommerce_update_order_status` by the gateway and the chat; the admin's chat completed order 14 |
+| API keys: hashed and revocable | DONE | Only a SHA-256 hash is stored; shown once; a revoked key was refused at sign-in on the cluster |
+| Key required on the gateway | DONE | 401 for a wrong key (seen in the gateway log), 503 if the database is down (tests) |
+| Audit log | DONE | One row per call, including `denied` (member, 0 ms) |
+| Admin API and React dashboard (login, servers, tools, keys, audit) | DONE | Running on the cluster; roles change what each person sees |
+| Chat agent with real tool calling, acting as the signed-in user | DONE | Tool trace shown under each answer; member and admin got different results |
+| Automated tests | DONE | 97 passing; GitHub Actions runs them on every push |
+| Credentials never in logs | DONE | Signed-URL log leak found and fixed |
+| Dockerfiles for each service | DONE | `Dockerfile` (backend and MCP servers) and `frontend/Dockerfile`; built and loaded into kind |
+| Helm chart, local and production values | DONE (production values not yet deployed) | `deploy/helm/urumi/`; installed and upgraded six revisions on kind |
+| Running on kind | DONE | `kubectl get pods -n urumi` all `Running`; Ingress at `*.localtest.me:8088` |
+| Ingress, PVCs, probes, requests and limits, Secrets | DONE | `kubectl get svc,ingress,pvc,secret -n urumi`; probes and resources in the chart |
+| WooCommerce MCP server reachable only inside the cluster | DONE | `ClusterIP` only, not in the Ingress; a stranger pod timed out (curl exit 28) from the NetworkPolicy |
+| Place a test order on the storefront (cash on delivery) | DONE | Order #14 placed at the storefront; the chat then listed and completed it |
+| Connect an external MCP client (documented) | DONE | `scripts/mcp_client_demo.py`; README section |
+| k3s on a VPS with TLS | NOT STARTED | Written in the README, not run yet |
+
+## Definition-of-done flow (two users)
+
+| Step | Status | Evidence |
+|---|---|---|
+| Member signs in, sees only read tools, cannot change an order | DONE | Member chat: no update tool; audit shows `denied` for a direct call |
+| Admin signs in and changes the order | DONE | Order 14 completed through the chat |
+| Audit log shows who did what | DONE | Rows for Admin and Member with outcome and duration |
+| Revoke a key | DONE | The revoked key was refused |
+| Disable a server | DONE | Currency off: 7 tools; on: 10 tools |
+| Kill a pod | DONE | Deleted the WooCommerce MCP pod; a new one was Running in under 30 seconds |
 
 ## Documents
 
-| Item | Status | Evidence |
+| Item | Status | Where |
 |---|---|---|
-| README: local setup | IN PROGRESS | Written up to the WooCommerce server; gateway and security parts being added |
-| README: VPS setup | NOT STARTED | |
-| System design and tradeoffs note | NOT STARTED | |
-| Threat model note | IN PROGRESS | `docs/SECURITY.md` covers keys, roles and audit log |
-| List of bonus items | NOT STARTED | |
+| README: local setup, place an order, external client, chat | DONE | `README.md` |
+| README: VPS setup | DONE (not yet run on a VPS) | `README.md` |
+| System design and tradeoffs note | DONE | `docs/DESIGN.md` |
+| Threat model note (four required points) | DONE | `docs/THREAT_MODEL.md` |
+| List of bonus items | DONE | `README.md`, "Bonus and stand-out items" |
 | Demo video | NOT STARTED | |
-| Repository open to reviewers (it is private today) | NOT STARTED | |
+| Repository open to reviewers | NOT STARTED | Private until submission |
 
-## Environment (Day 1)
+## Bonus and stand-out
 
-| Item | Status | Evidence |
-|---|---|---|
-| Docker Desktop engine works | DONE | hello-world ran |
-| kubectl, Helm, kind installed | DONE | version commands ran |
-| Repo created, first push | DONE | commit 9ea7510 |
-| MCP SDK 2.3.0 imports on Python 3.13.1 | DONE | import check passed |
-| PostgreSQL 16 in Docker | DONE | `db/docker-compose.yml` (007de21) |
+| Item | Status |
+|---|---|
+| Per-tool permissions | DONE |
+| SSRF check on server addresses | DONE |
+| NetworkPolicies, non-root containers, read-only filesystem | DONE |
+| Helm upgrade and rollback documented | DONE (rollback not demonstrated live) |
+| Per-person chat rate limit | DONE (in memory) |
+| Continuous integration | DONE |
+| Observability: server health and audit log | PARTIAL (no Prometheus metrics) |
+| More than one gateway replica | NOT STARTED |
+| Per-key rate limit on `/mcp` | NOT STARTED |
+| Encrypted upstream credentials | NOT STARTED |
