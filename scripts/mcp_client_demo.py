@@ -34,6 +34,15 @@ async def main():
     print(f"Connecting to {URL}")
     timeout = httpx2.Timeout(30.0, read=120.0)
     async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=timeout) as http:
+        probe = await http.post(
+            URL,
+            json={"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "key-check", "version": "1"}}},
+            headers={"Accept": "application/json, text/event-stream"},
+        )
+        if probe.status_code in (401, 403):
+            print(f"\nREJECTED by the gateway: HTTP {probe.status_code} - {probe.text[:120]}")
+            print("This API key is invalid or has been revoked, so no tool can be listed or called.")
+            return
         async with Client(streamable_http_client(URL, http_client=http)) as client:
             listing = await client.list_tools()
             print(f"\nThis key can see {len(listing.tools)} tools:")
